@@ -41,14 +41,23 @@ wsgi_server.start()
 
 neo = neopixel.NeoPixel(PX_PIN, NUM_PX, auto_write=AUTO_WRITE, pixel_order=ORDER, brightness=0.01)
 print(dir(board))
-neo.fill([0, 0, 150])
-neo[0] = (0, 170, 40)
-neo[1] = (0, 0, 0)
-neo[2] = (150, 150, 150)
 
-@web_app.route("/hi", methods=["GET"])
-def get_readings(_):
+@web_app.route("/clear", methods=["GET"])
+def clear(_):
     """Gets the current sensor readings"""
+    neo.fill([0, 0, 0])
+    neo.show()
+    return (
+        "200 OK",
+        [("Content-type", "application/json; charset=utf-8")],
+        [json.dumps({"success": True}).encode("UTF-8")]
+    )
+
+@web_app.route("/set", methods=["POST"])
+def set_px(request):
+    """no"""
+    req = json.loads(request.wsgi_environ["wsgi.input"].getvalue())
+    neo[int(req["px"])] = req["rgb"]
     neo.show()
     return (
         "200 OK",
