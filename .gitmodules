@@ -1,0 +1,3 @@
+[submodule "circuit-python-utils"]
+	path = circuit-python-utils
+	url = https://github.com/another-salad/circuit-python-utils.git
