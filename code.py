@@ -24,6 +24,7 @@ import board
 import neopixel
 
 from wiznet5keth import NetworkConfig, config_eth, wsgi_web_server
+from wsgi_web_app_helpers import web_response_wrapper
 from config_utils import get_config_from_json_file
 
 
@@ -40,30 +41,28 @@ wsgi_server, web_app = wsgi_web_server(eth_interface)
 wsgi_server.start()
 
 neo = neopixel.NeoPixel(PX_PIN, NUM_PX, auto_write=AUTO_WRITE, pixel_order=ORDER, brightness=0.01)
-print(dir(board))
+
 
 @web_app.route("/clear", methods=["GET"])
 def clear(_):
-    """Gets the current sensor readings"""
-    neo.fill([0, 0, 0])
-    neo.show()
-    return (
-        "200 OK",
-        [("Content-type", "application/json; charset=utf-8")],
-        [json.dumps({"success": True}).encode("UTF-8")]
-    )
+    """Clears the RGB screen"""
+    def _clear():
+        neo.fill([0, 0, 0])
+        neo.show()
+
+    return web_response_wrapper(_clear)
+
 
 @web_app.route("/set", methods=["POST"])
 def set_px(request):
     """no"""
-    req = json.loads(request.wsgi_environ["wsgi.input"].getvalue())
-    neo[int(req["px"])] = req["rgb"]
-    neo.show()
-    return (
-        "200 OK",
-        [("Content-type", "application/json; charset=utf-8")],
-        [json.dumps({"success": True}).encode("UTF-8")]
-    )
+    def _set_px(req):
+        req = json.loads(request.wsgi_environ["wsgi.input"].getvalue())
+        neo[int(req["px"])] = req["rgb"]
+        neo.show()
+
+    return web_response_wrapper(_set_px, request)
+
 
 while True:
     wsgi_server.update_poll()
