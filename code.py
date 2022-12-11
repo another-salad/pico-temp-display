@@ -18,7 +18,6 @@ A mac address can be generated via circuit-python-utils.networking.generate_mac_
 """
 
 import time
-import json
 import re
 
 import board
