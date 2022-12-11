@@ -19,12 +19,13 @@ A mac address can be generated via circuit-python-utils.networking.generate_mac_
 
 import time
 import json
+import re
 
 import board
 import neopixel
 
 from wiznet5keth import NetworkConfig, config_eth, wsgi_web_server
-from wsgi_web_app_helpers import web_response_wrapper
+from wsgi_web_app_helpers import web_response_wrapper, get_json_wsgi_input, bad_request
 from config_utils import get_config_from_json_file
 
 
@@ -49,17 +50,38 @@ def clear(_):
     def _clear():
         neo.fill([0, 0, 0])
         neo.show()
+        return None, None
 
     return web_response_wrapper(_clear)
 
 
 @web_app.route("/set", methods=["POST"])
 def set_px(request):
-    """no"""
+    """Set a X number of pixels to a value"""
     def _set_px(req):
-        req = json.loads(request.wsgi_environ["wsgi.input"].getvalue())
-        neo[int(req["px"])] = req["rgb"]
+        response = None
+        status_code = None
+        req = get_json_wsgi_input(request, bad_request)
+        if not isinstance(req, dict):  # Something bad has happened here.
+            return req
+
+        for rgb, pixels in req.items():
+            if re.match("\d\d\d", rgb) and isinstance(pixels, list):
+                for px in pixels:
+                    try:
+                        px_int = int(px)
+                    except Exception:
+                        return bad_request("Pixel numbers from list must be integers")
+
+                    if px_int > NUM_PX:
+                        return bad_request(f"Cannot set value to pixel {px_int}. Max supported: {NUM_PX}")
+
+                    neo[int(px)] = [int(x * 200) for x in rgb]
+            else:
+                return bad_request('Input did not match schema. Example: {"010": [1,2,3,4,5], "011": [16,60]}')
+
         neo.show()
+        return response, status_code
 
     return web_response_wrapper(_set_px, request)
 
