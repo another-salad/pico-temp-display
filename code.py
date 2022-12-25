@@ -27,6 +27,9 @@ from wiznet5keth import NetworkConfig, config_eth, wsgi_web_server
 from wsgi_web_app_helpers import web_response_wrapper, get_json_wsgi_input, bad_request
 from config_utils import get_config_from_json_file
 
+# _local_ imports
+from display import gen_char_values
+
 
 # NeoPixel config
 PX_PIN = board.GP6
@@ -54,7 +57,7 @@ def clear(_):
     return web_response_wrapper(_clear)
 
 
-@web_app.route("/set", methods=["POST"])
+@web_app.route("/set-rgb", methods=["POST"])
 def set_px(request):
     """Set a X number of pixels to a value"""
     def _set_px(req):
@@ -83,6 +86,46 @@ def set_px(request):
         return response, status_code
 
     return web_response_wrapper(_set_px, request)
+
+
+@web_app.route("/set-temp", methods=["POST"])
+def set_px(request):
+    """
+    Sets the temperature value on the display. Only supports and int (positive or negative) value represented as a str.
+    Len of 2 chars (i.e "-1", "32", "9").
+
+    Validates the input against the supported char list.
+
+    The key is the RGB value you want the text to be. The below example sets the -1 display text to blue.
+    Example: {"001": "-1"}
+    """
+    def _set_values():
+        # TODO: there will be a lot of code here we should be sharing with above ^^^^^^^
+        response = None
+        status_code = None
+        req = get_json_wsgi_input(request, bad_request)
+        if not isinstance(req, dict):  # Something bad has happened here.
+            return req
+
+        for rgb, temp_value in req.items():
+            # make we sure are a string
+            temp_value = str(temp_value)
+            # simple regex for temp "--" is a valid value for null, \d- is clearly just nonsense.
+            # regex's are a little hideous as MicroPython's regex engine isn't too glamorous...
+            if re.match("\d\d\d", rgb) and re.match("(--)|(^-\d)|(\d\d)|(\d)", temp_value):
+                try:
+                    rgb_temp_vals = gen_char_values(temp_value)
+                except Exception as exc:
+                    return bad_request(repr(rgb_temp_vals))
+                for px in rgb_temp_vals:
+                    neo[int(px)] = [int(x * 200) for x in rgb]
+            else:
+                return bad_request("Input value %s doesn't appear to match the expected format: \{'001': '-3'\}." % req)
+
+        neo.show()
+        return response, status_code
+
+    return web_response_wrapper(_set_values, request)
 
 
 while True:
