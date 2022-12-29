@@ -53,6 +53,22 @@ def _clear():
     return None, None
 
 
+class BaseDisplayHandler:
+    """Base class for handling display controls from JSON POST request data."""
+
+    def __init__(self, json_request):
+        self.response = None
+        self.status_code = None
+        self.req_data = get_json_wsgi_input(json_request, bad_request)
+
+    @staticmethod
+    def clear():
+        return _clear()
+
+    def set(self):
+        raise NotImplementedError("set method needs implementing.")
+
+
 @web_app.route("/clear", methods=["GET"])
 def clear(_):
     """API call. Clears the RGB screen"""
@@ -62,34 +78,31 @@ def clear(_):
 @web_app.route("/set-rgb", methods=["POST"])
 def set_px(request):
     """API call. Set a X number of pixels to a value"""
+    class SetPx(BaseDisplayHandler):
 
-    def _set_px(_req):
-        response = None
-        status_code = None
-        req = get_json_wsgi_input(_req, bad_request)
-        if not isinstance(req, dict):  # Something bad has happened here.
-            return req
+        def set(self):
+            if not isinstance(self.req_data, dict):  # Something bad has happened here.
+                return self.req_data
+            self.clear()
+            for rgb, pixels in self.req_data.items():
+                if re.match("\d\d\d", rgb) and isinstance(pixels, list):
+                    for px in pixels:
+                        try:
+                            px_int = int(px)
+                        except Exception:
+                            return bad_request("Pixel numbers from list must be integers")
+                        if px_int > NUM_PX:
+                            return bad_request(f"Cannot set value to pixel {px_int}. Max supported: {NUM_PX}")
 
-        _clear()
-        for rgb, pixels in req.items():
-            if re.match("\d\d\d", rgb) and isinstance(pixels, list):
-                for px in pixels:
-                    try:
-                        px_int = int(px)
-                    except Exception:
-                        return bad_request("Pixel numbers from list must be integers")
+                        neo[int(px)] = [int(x * 200) for x in rgb]
+                else:
+                    return bad_request('Input did not match schema. Example: {"010": [1,2,3,4,5], "011": [16,60]}')
+            neo.show()
+            return self.response, self.status_code
 
-                    if px_int > NUM_PX:
-                        return bad_request(f"Cannot set value to pixel {px_int}. Max supported: {NUM_PX}")
 
-                    neo[int(px)] = [int(x * 200) for x in rgb]
-            else:
-                return bad_request('Input did not match schema. Example: {"010": [1,2,3,4,5], "011": [16,60]}')
-
-        neo.show()
-        return response, status_code
-
-    return web_response_wrapper(_set_px, request)
+    set_px_handler = SetPx(request)
+    return web_response_wrapper(set_px_handler.set)
 
 
 @web_app.route("/set-temp", methods=["POST"])
@@ -104,35 +117,35 @@ def set_temp(request):
     The key is the RGB value you want the text to be. The below example sets the -1 display text to blue.
     Example: {"001": "-1"}
     """
-    def _set_values(_req):
-        # TODO: there will be a lot of code here we should be sharing with above ^^^^^^^
-        response = None
-        status_code = None
-        req = get_json_wsgi_input(_req, bad_request)
-        if not isinstance(req, dict):  # Something bad has happened here.
-            return req
+    class SetTemp(BaseDisplayHandler):
 
-        for rgb, temp_value in req.items():
-            # make we sure are a string
-            temp_value = str(temp_value)
-            # simple regex for temp "--" is a valid value for null, \d- is clearly just nonsense.
-            # regex's are a little hideous as MicroPython's regex engine isn't too glamorous...
-            if re.match("\d\d\d", rgb) and re.match("(--)|(^-\d)|(\d\d)|(\d)", temp_value):
-                try:
-                    rgb_temp_vals = gen_char_values(temp_value)
-                except Exception as exc:
-                    return bad_request(repr(exc))
+        def set(self):
+            if not isinstance(self.req_data, dict):  # Something bad has happened here.
+                return self.req_data
+            for rgb, temp_value in self.req_data.items():
+                # make sure we are a string
+                temp_value = str(temp_value)
+                # simple regex for temp. "--" is a valid value for null, \d- is clearly just nonsense.
+                # regex's are a little hideous as MicroPython's regex engine isn't too glamorous...
+                if re.match("\d\d\d", rgb) and re.match("(--)|(^-\d)|(\d\d)|(\d)", temp_value):
+                    try:
+                        rgb_temp_vals = gen_char_values(temp_value)
+                    except Exception as exc:
+                        return bad_request(repr(exc))
+                    self.clear() # only clearing the screen now as success seems likely
+                    for px in rgb_temp_vals:
+                        neo[int(px)] = [int(x * 200) for x in rgb]
+                else:
+                    return bad_request(
+                        "Input value %s doesn't appear to match the expected format: \{'001': '-3'\}." % self.req_data
+                    )
 
-                _clear()  # only clearing the screen now as success seems likely
-                for px in rgb_temp_vals:
-                    neo[int(px)] = [int(x * 200) for x in rgb]
-            else:
-                return bad_request("Input value %s doesn't appear to match the expected format: \{'001': '-3'\}." % req)
+            neo.show()
+            return self.response, self.status_code
 
-        neo.show()
-        return response, status_code
 
-    return web_response_wrapper(_set_values, request)
+    set_temp_handler = SetTemp(request)
+    return web_response_wrapper(set_temp_handler.set)
 
 
 while True:
