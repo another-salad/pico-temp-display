@@ -47,7 +47,7 @@ def gen_char_values(chars):
       - list[int]
     """
     num_chars = len(chars)
-    max_chars = len(digits.keys())
+    max_chars = len(list(digits.keys()))  # the list typecast is due to MicroPython awfulness
     if num_chars > max_chars:
         raise TooManyCharsException("'%s' exceeds the character limit: %s" % (chars, max_chars))
 

@@ -46,24 +46,27 @@ wsgi_server.start()
 neo = neopixel.NeoPixel(PX_PIN, NUM_PX, auto_write=AUTO_WRITE, pixel_order=ORDER, brightness=0.01)
 
 
+def _clear():
+    """Clears the screen"""
+    neo.fill([0, 0, 0])
+    neo.show()
+    return None, None
+
+
 @web_app.route("/clear", methods=["GET"])
 def clear(_):
-    """Clears the RGB screen"""
-    def _clear():
-        neo.fill([0, 0, 0])
-        neo.show()
-        return None, None
-
+    """API call. Clears the RGB screen"""
     return web_response_wrapper(_clear)
 
 
 @web_app.route("/set-rgb", methods=["POST"])
 def set_px(request):
-    """Set a X number of pixels to a value"""
-    def _set_px(req):
+    """API call. Set a X number of pixels to a value"""
+
+    def _set_px(_req):
         response = None
         status_code = None
-        req = get_json_wsgi_input(request, bad_request)
+        req = get_json_wsgi_input(_req, bad_request)
         if not isinstance(req, dict):  # Something bad has happened here.
             return req
 
@@ -91,6 +94,7 @@ def set_px(request):
 @web_app.route("/set-temp", methods=["POST"])
 def set_px(request):
     """
+    API call.
     Sets the temperature value on the display. Only supports and int (positive or negative) value represented as a str.
     Len of 2 chars (i.e "-1", "32", "9").
 
@@ -99,13 +103,14 @@ def set_px(request):
     The key is the RGB value you want the text to be. The below example sets the -1 display text to blue.
     Example: {"001": "-1"}
     """
-    def _set_values():
+    def _set_values(_req):
         # TODO: there will be a lot of code here we should be sharing with above ^^^^^^^
         response = None
         status_code = None
-        req = get_json_wsgi_input(request, bad_request)
+        req = get_json_wsgi_input(_req, bad_request)
         if not isinstance(req, dict):  # Something bad has happened here.
             return req
+
 
         for rgb, temp_value in req.items():
             # make we sure are a string
@@ -115,8 +120,10 @@ def set_px(request):
             if re.match("\d\d\d", rgb) and re.match("(--)|(^-\d)|(\d\d)|(\d)", temp_value):
                 try:
                     rgb_temp_vals = gen_char_values(temp_value)
+                    # only clear the screen if success is likely
+                    _clear()
                 except Exception as exc:
-                    return bad_request(repr(rgb_temp_vals))
+                    return bad_request(repr(exc))
                 for px in rgb_temp_vals:
                     neo[int(px)] = [int(x * 200) for x in rgb]
             else:
