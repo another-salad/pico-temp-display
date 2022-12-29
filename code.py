@@ -139,7 +139,6 @@ def set_temp(request):
                     return bad_request(
                         "Input value %s doesn't appear to match the expected format: \{'001': '-3'\}." % self.req_data
                     )
-
             neo.show()
             return self.response, self.status_code
 
