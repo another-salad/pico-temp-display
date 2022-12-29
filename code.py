@@ -70,6 +70,7 @@ def set_px(request):
         if not isinstance(req, dict):  # Something bad has happened here.
             return req
 
+        _clear()
         for rgb, pixels in req.items():
             if re.match("\d\d\d", rgb) and isinstance(pixels, list):
                 for px in pixels:
@@ -92,7 +93,7 @@ def set_px(request):
 
 
 @web_app.route("/set-temp", methods=["POST"])
-def set_px(request):
+def set_temp(request):
     """
     API call.
     Sets the temperature value on the display. Only supports and int (positive or negative) value represented as a str.
@@ -111,7 +112,6 @@ def set_px(request):
         if not isinstance(req, dict):  # Something bad has happened here.
             return req
 
-
         for rgb, temp_value in req.items():
             # make we sure are a string
             temp_value = str(temp_value)
@@ -120,10 +120,10 @@ def set_px(request):
             if re.match("\d\d\d", rgb) and re.match("(--)|(^-\d)|(\d\d)|(\d)", temp_value):
                 try:
                     rgb_temp_vals = gen_char_values(temp_value)
-                    # only clear the screen if success is likely
-                    _clear()
                 except Exception as exc:
                     return bad_request(repr(exc))
+
+                _clear()  # only clearing the screen now as success seems likely
                 for px in rgb_temp_vals:
                     neo[int(px)] = [int(x * 200) for x in rgb]
             else:
