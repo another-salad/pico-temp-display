@@ -18,12 +18,13 @@ A mac address can be generated via circuit-python-utils.networking.generate_mac_
 """
 
 import time
+import json
 
 import board
 import neopixel
 
 from wiznet5keth import NetworkConfig, config_eth, wsgi_web_server
-from wsgi_web_app_helpers import web_response_wrapper
+from wsgi_web_app_helpers import web_response_wrapper, internal_server_error, HTTPStatusCodes, ErrorCodes
 from config_utils import get_config_from_json_file
 
 # _local_ imports
@@ -44,16 +45,25 @@ wsgi_server.start()
 
 neo = neopixel.NeoPixel(PX_PIN, NUM_PX, auto_write=AUTO_WRITE, pixel_order=ORDER, brightness=0.01)
 
+display_update_event = None
+
+
+def clear_global():
+    global display_update_event
+    display_update_event = None
+
 
 @web_app.route("/clear", methods=["GET"])
 def clear_screen(_):
     """API call. Clears the RGB screen"""
+    clear_global()
     return web_response_wrapper(clear, neo)
 
 
 @web_app.route("/set-rgb", methods=["POST"])
 def set_px(request):
     """API call. Set a X number of pixels to a value"""
+    clear_global()
     set_px_handler = SetPx(request, neo, NUM_PX)
     return web_response_wrapper(set_px_handler.set)
 
@@ -70,11 +80,31 @@ def set_temp(request):
     The key is the RGB value you want the text to be. The below example sets the -1 display text to blue.
     Example: {"001": "-1"}
     """
-    set_temp_handler = SetTemp(request, neo, NUM_PX)
-    return web_response_wrapper(set_temp_handler.set)
+    try:
+        global display_update_event
+        set_temp_handler = SetTemp(request, neo, NUM_PX).set()
+        display_update_event = set_temp_handler.set
+        status_code = HTTPStatusCodes.OK
+        response = {"error": ErrorCodes.OK}
+    except Exception as exc:
+        response, status_code = internal_server_error(repr(exc))
 
+    return (
+        status_code,
+        [("Content-type", "application/json; charset=utf-8")],
+        [json.dumps(response).encode("UTF-8")]
+    )
 
+# Since we can't run the screen update asynchronously (see the text block in display.SetTemp.set), we will add a
+# simple counter to stop the update rate from being insane...
+madness_counter = 0
 while True:
     wsgi_server.update_poll()
-    time.sleep(0.1)
+    if madness_counter == 5:
+        if callable(display_update_event):
+            display_update_event()
+        madness_counter = 0
+    else:
+        time.sleep(0.1)
+    madness_counter += 1
     eth_interface.maintain_dhcp_lease()

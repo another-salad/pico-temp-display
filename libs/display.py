@@ -1,6 +1,11 @@
-"""Sets the values for displaying supported chars on a Waveshare RGB LED Pico hat (in landscape)"""
+"""Sets the values for displaying supported chars on a Waveshare RGB LED Pico hat (in landscape)
+
+See code.py (in root) for full details.
+
+"""
 
 import re
+from random import randint
 
 from wsgi_web_app_helpers import get_json_wsgi_input, bad_request
 
@@ -48,7 +53,7 @@ def gen_char_values(chars):
       - chars (str): the chars to display on the RGB screen
 
     returns:
-      - list[int]
+      - tuple: list[int], str
     """
     num_chars = len(chars)
     max_chars = len(list(digits.keys()))  # the list typecast is due to MicroPython awfulness
@@ -66,7 +71,17 @@ def gen_char_values(chars):
 
         active_pixels.extend(digits[index][char])
 
-    return active_pixels
+    real_num = int(chars)
+    if real_num < 15:
+        background_colour = "blue"
+    elif 15 <= real_num < 26:
+        background_colour = "green"
+    elif 26 <= real_num < 30:
+        background_colour = "yellow"
+    else:
+        background_colour = "red"
+
+    return active_pixels, background_colour
 
 
 def clear(neo):
@@ -120,30 +135,58 @@ class SetPx(BaseDisplayHandler):
         return self.response, self.status_code
 
 
+class DisplayUpdater:
+
+    # background colours
+    blue = [[0, 0, 200], [200, 200, 200]]
+    yellow = [[200, 200, 0], [200, 0, 200]]
+    green = [[0, 200, 0], [0, 200, 200]]
+    red = [[200, 0, 0], [0, 0, 0]]
+
+    def __init__(self, display_text, display_text_colour, background_colour, neo, num_px):
+        self.display_text = display_text
+        self.display_text_colour = display_text_colour
+        self.background_colour = background_colour
+        self.neo = neo
+        self.num_px = num_px
+
+    def set(self):
+        normalized_text_colour = [int(int(x) * 200) for x in self.display_text_colour]
+        # create entire screen (background)
+        for x in range(self.num_px):
+            self.neo[x] = getattr(self, self.background_colour)[randint(0, 1)]
+
+        # update screen values to include the temp value
+        for text_px in self.display_text:
+            self.neo[int(text_px)] = normalized_text_colour
+
+        self.neo.show()
+
+
 class SetTemp(BaseDisplayHandler):
 
     def set(self):
         if not isinstance(self.req_data, dict):  # Something bad has happened here.
             return self.req_data
 
+        rbg_text_colour = None
         for rgb, temp_value in self.req_data.items():
             # make sure we are a string
             temp_value = str(temp_value)
             # simple regex for temp. "--" is a valid value for null, \d- is clearly just nonsense.
             # regex's are a little hideous as MicroPython's regex engine isn't too glamorous...
             if re.match("\d\d\d", rgb) and re.match("(--)|(^-\d)|(\d\d)|(\d)", temp_value):
-                try:
-                    rgb_temp_vals = gen_char_values(temp_value)
-                except Exception as exc:
-                    return bad_request(repr(exc))
-
+                rgb_temp_vals, background_colour = gen_char_values(temp_value)
+                rbg_text_colour = rgb
                 self.clear() # only clearing the screen now as success seems likely
-                for px in rgb_temp_vals:
-                    self.neo[int(px)] = [int(x * 200) for x in rgb]
+                break
             else:
-                return bad_request(
+                raise Exception(
                     "Input value %s doesn't appear to match the expected format: \{'001': '-3'\}." % self.req_data
                 )
 
-        self.neo.show()
-        return self.response, self.status_code
+        # You may be thinking asyncio would be great here, I did too. However the event loops in CircuitPython are
+        # inherently single threaded. Since we are already at the mercy of a blocking event loop for the web server,
+        # we are unable to create concurrently running (i.e non-blocking) asyncio tasks whilst retaining a working
+        # WSGI. Please look at the slight madness in _code.py_ for full context.
+        return DisplayUpdater(rgb_temp_vals, rbg_text_colour, background_colour, self.neo, self.num_px)
