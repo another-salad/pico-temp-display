@@ -6,6 +6,8 @@ This depends on the following being present in the Pico's 'lib' DIR:
         - adafruit_wiznet5k
         - adafruit_bus_device
         - adafruit_requests.mpy
+        - asyncio
+        - adafruit_ticks.mpy
 
     --- Circuit-python-utils (submodule) ---
         - wiznet5keth.py (W5100s-evb-pico)
@@ -19,6 +21,8 @@ A mac address can be generated via circuit-python-utils.networking.generate_mac_
 
 import time
 import json
+
+import asyncio
 
 import board
 import neopixel
@@ -45,12 +49,19 @@ wsgi_server.start()
 
 neo = neopixel.NeoPixel(PX_PIN, NUM_PX, auto_write=AUTO_WRITE, pixel_order=ORDER, brightness=0.01)
 
-display_update_event = None
+current_display_text = None
+background_event = asyncio.Event()
+server_event = asyncio.Event()
 
 
 def clear_global():
-    global display_update_event
-    display_update_event = None
+    global background_event
+    global current_display_text
+    current_display_text = None
+    background_event.set()
+    time.sleep(0.2)
+    # Create a new event
+    background_event = asyncio.Event()
 
 
 @web_app.route("/clear", methods=["GET"])
@@ -81,9 +92,12 @@ def set_temp(request):
     Example: {"001": "-1"}
     """
     try:
-        global display_update_event
+        global current_display_text
         set_temp_handler = SetTemp(request, neo, NUM_PX).set()
-        display_update_event = set_temp_handler.set
+        if set_temp_handler.display_text != current_display_text:
+            clear_global()  # resets the pertinent global variables to default, sets the old background event
+            current_display_text = set_temp_handler.display_text
+            asyncio.create_task(run_async_task(set_temp_handler.set, background_event, 0.5))
         status_code = HTTPStatusCodes.OK
         response = {"error": ErrorCodes.OK}
     except Exception as exc:
@@ -95,16 +109,22 @@ def set_temp(request):
         [json.dumps(response).encode("UTF-8")]
     )
 
-# Since we can't run the screen update asynchronously (see the text block in display.SetTemp.set), we will add a
-# simple counter to stop the update rate from being insane...
-madness_counter = 0
-while True:
+
+def run_server(wsgi_server, eth_interface):
     wsgi_server.update_poll()
-    if madness_counter == 5:
-        if callable(display_update_event):
-            display_update_event()
-        madness_counter = 0
-    else:
-        time.sleep(0.1)
-    madness_counter += 1
     eth_interface.maintain_dhcp_lease()
+
+
+async def run_async_task(callable_func, stop_event, sleep_val, *args, **kwargs):
+    while not stop_event.is_set():
+        callable_func(*args, **kwargs)
+        await asyncio.sleep(sleep_val)
+
+
+async def main(wsgi_server, eth_interface, server_event):
+    """Entry point"""
+    server_task = asyncio.create_task(run_async_task(run_server, server_event, 0.1, wsgi_server, eth_interface))
+    await asyncio.gather(server_task)
+
+
+asyncio.run(main(wsgi_server, eth_interface, server_event))

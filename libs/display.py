@@ -185,8 +185,4 @@ class SetTemp(BaseDisplayHandler):
                     "Input value %s doesn't appear to match the expected format: \{'001': '-3'\}." % self.req_data
                 )
 
-        # You may be thinking asyncio would be great here, I did too. However the event loops in CircuitPython are
-        # inherently single threaded. Since we are already at the mercy of a blocking event loop for the web server,
-        # we are unable to create concurrently running (i.e non-blocking) asyncio tasks whilst retaining a working
-        # WSGI. Please look at the slight madness in _code.py_ for full context.
         return DisplayUpdater(rgb_temp_vals, rbg_text_colour, background_colour, self.neo, self.num_px)
