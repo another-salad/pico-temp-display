@@ -19,7 +19,6 @@ A mac address can be generated via circuit-python-utils.networking.generate_mac_
 
 """
 
-import time
 import json
 
 import asyncio
@@ -59,7 +58,6 @@ def clear_global():
     global current_display_text
     current_display_text = None
     background_event.set()
-    time.sleep(0.2)
     # Create a new event
     background_event = asyncio.Event()
 
