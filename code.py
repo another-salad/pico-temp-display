@@ -97,7 +97,7 @@ def set_temp(request):
         if set_temp_handler.display_text != current_display_text:
             clear_global()  # resets the pertinent global variables to default, sets the old background event
             current_display_text = set_temp_handler.display_text
-            asyncio.create_task(run_async_task(set_temp_handler.set, background_event, 0.5))
+            asyncio.create_task(run_async_task(set_temp_handler.set, background_event, 1))
         status_code = HTTPStatusCodes.OK
         response = {"error": ErrorCodes.OK}
     except Exception as exc:

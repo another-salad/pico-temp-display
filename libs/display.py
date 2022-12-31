@@ -178,7 +178,6 @@ class SetTemp(BaseDisplayHandler):
             if re.match("\d\d\d", rgb) and re.match("(--)|(^-\d)|(\d\d)|(\d)", temp_value):
                 rgb_temp_vals, background_colour = gen_char_values(temp_value)
                 rbg_text_colour = rgb
-                self.clear() # only clearing the screen now as success seems likely
                 break
             else:
                 raise Exception(
