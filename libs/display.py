@@ -71,15 +71,18 @@ def gen_char_values(chars):
 
         active_pixels.extend(digits[index][char])
 
-    real_num = int(chars)
-    if real_num < 15:
-        background_colour = "blue"
-    elif 15 <= real_num < 26:
-        background_colour = "green"
-    elif 26 <= real_num < 30:
-        background_colour = "yellow"
-    else:
+    if chars == "--":
         background_colour = "red"
+    else:
+        real_num = int(chars)
+        if real_num < 15:
+            background_colour = "blue"
+        elif 15 <= real_num < 26:
+            background_colour = "green"
+        elif 26 <= real_num < 30:
+            background_colour = "yellow"
+        else:
+            background_colour = "red"
 
     return active_pixels, background_colour
 
