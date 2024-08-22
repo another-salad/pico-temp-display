@@ -31,7 +31,7 @@ from wsgi_web_app_helpers import web_response_wrapper, internal_server_error, HT
 from config_utils import get_config_from_json_file
 
 # _local_ imports
-from display import SetPx, SetTemp, clear
+from display import SetPx, SetTemp, clear, SetColourCycle
 
 
 # NeoPixel config
@@ -61,6 +61,20 @@ def clear_global():
     # Create a new event
     background_event = asyncio.Event()
 
+def handle_async_request(func):
+    status_code = HTTPStatusCodes.OK
+    response = {"error": ErrorCodes.OK}
+    try:
+        px_handler = func()
+        asyncio.create_task(run_async_task(px_handler.set, background_event, 1))
+    except Exception as exc:
+        response, status_code = internal_server_error(repr(exc))
+    return (
+        status_code,
+        [("Content-type", "application/json; charset=utf-8")],
+        [json.dumps(response).encode("UTF-8")]
+    )
+
 
 @web_app.route("/clear", methods=["GET"])
 def clear_screen(_):
@@ -75,6 +89,14 @@ def set_px(request):
     clear_global()
     set_px_handler = SetPx(request, neo, NUM_PX)
     return web_response_wrapper(set_px_handler.set)
+
+@web_app.route("/set-colour-cycle", methods=["GET"])
+def set_colour_cycle(_):
+    """API call. Set a X number of pixels to a value"""
+    clear_global()
+    def _func():
+        return SetColourCycle(neo, NUM_PX).set()
+    return handle_async_request(_func)
 
 
 @web_app.route("/set-temp", methods=["POST"])

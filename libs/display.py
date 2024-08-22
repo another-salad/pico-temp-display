@@ -97,10 +97,7 @@ def clear(neo):
 class BaseDisplayHandler:
     """Base class for handling display controls from JSON POST request data."""
 
-    def __init__(self, json_request, neo, num_px):
-        self.response = None
-        self.status_code = None
-        self.req_data = get_json_wsgi_input(json_request, bad_request)
+    def __init__(self, neo, num_px):
         self.neo = neo
         self.num_px = num_px
 
@@ -110,8 +107,16 @@ class BaseDisplayHandler:
     def set(self):
         raise NotImplementedError("set method needs implementing.")
 
+class PostReqDisplayHandler(BaseDisplayHandler):
 
-class SetPx(BaseDisplayHandler):
+    def __init__(self, json_request, neo, num_px):
+        self.response = None
+        self.status_code = None
+        self.req_data = get_json_wsgi_input(json_request, bad_request)
+        super().__init__(neo, num_px)
+
+
+class SetPx(PostReqDisplayHandler):
 
     def set(self):
         if not isinstance(self.req_data, dict):  # Something bad has happened here.
@@ -138,13 +143,16 @@ class SetPx(BaseDisplayHandler):
         return self.response, self.status_code
 
 
-class DisplayUpdater:
+class BaseDisplayUpdater:
 
     # background colours
     blue = [[0, 0, 200], [200, 200, 200]]
     yellow = [[200, 200, 0], [200, 0, 200]]
     green = [[0, 200, 0], [0, 200, 200]]
     red = [[200, 0, 0], [0, 0, 0]]
+
+
+class TempDisplayUpdater(BaseDisplayUpdater):
 
     def __init__(self, display_text, display_text_colour, background_colour, neo, num_px):
         self.display_text = display_text
@@ -165,8 +173,30 @@ class DisplayUpdater:
 
         self.neo.show()
 
+class ColourCycleDisplayUpdater(BaseDisplayUpdater):
 
-class SetTemp(BaseDisplayHandler):
+    # I'd care about efficiency if it was important here.
+    ALL_COLOURS = sum(
+        [
+            BaseDisplayUpdater.blue,
+            BaseDisplayUpdater.red,
+            BaseDisplayUpdater.yellow,
+            BaseDisplayUpdater.green
+        ],
+        []
+    )
+    LEN_OF_COLOUR_CHOICES = len(ALL_COLOURS)
+
+    def __init__(self, neo, num_px: int):
+        self.neo = neo
+        self.num_px = num_px
+
+    def set(self):
+        for x in range(self.num_px):
+            self.neo[x] = self.ALL_COLOURS[randint(0, self.LEN_OF_COLOUR_CHOICES -1)]
+        self.neo.show()
+
+class SetTemp(PostReqDisplayHandler):
 
     def set(self):
         if not isinstance(self.req_data, dict):  # Something bad has happened here.
@@ -187,4 +217,9 @@ class SetTemp(BaseDisplayHandler):
                     "Input value %s doesn't appear to match the expected format: \{'001': '-3'\}." % self.req_data
                 )
 
-        return DisplayUpdater(rgb_temp_vals, rbg_text_colour, background_colour, self.neo, self.num_px)
+        return TempDisplayUpdater(rgb_temp_vals, rbg_text_colour, background_colour, self.neo, self.num_px)
+
+class SetColourCycle(BaseDisplayHandler):
+
+    def set(self):
+        return ColourCycleDisplayUpdater(self.neo, self.num_px)
