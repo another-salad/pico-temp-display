@@ -50,7 +50,7 @@ eth_interface = config_eth(NetworkConfig(**get_config_from_json_file()))
 wsgi_server, web_app = wsgi_web_server(eth_interface)
 wsgi_server.start()
 
-neo = neopixel.NeoPixel(PX_PIN, NUM_PX, auto_write=AUTO_WRITE, pixel_order=ORDER, brightness=0.01)
+neo = neopixel.NeoPixel(PX_PIN, NUM_PX, auto_write=AUTO_WRITE, pixel_order=ORDER, brightness=0.02)
 
 current_display_text = None
 background_event = asyncio.Event()
