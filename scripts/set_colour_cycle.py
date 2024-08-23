@@ -20,8 +20,6 @@ def req(dest: str):
     with request.urlopen(web_req) as req:
         resp = json.loads(req.read().decode("utf-8"))
         print(resp)
-        if resp["error"] != 0:
-            print(resp)
 
 def main():
     """Entry point"""
