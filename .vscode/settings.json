@@ -1,0 +1,13 @@
+{
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportShadowedImports": "none"
+    },
+    "[python]": {
+        "editor.rulers": [
+            {
+                "column": 120,
+                "color": "#ffa500"
+            }
+        ]
+    }
+}

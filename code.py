@@ -19,9 +19,13 @@ A mac address can be generated via circuit-python-utils.networking.generate_mac_
 
 """
 
+import time
+
 import json
 
 import asyncio
+
+# import gc
 
 import board
 import neopixel
@@ -31,7 +35,7 @@ from wsgi_web_app_helpers import web_response_wrapper, internal_server_error, HT
 from config_utils import get_config_from_json_file
 
 # _local_ imports
-from display import SetPx, SetTemp, clear
+from display import SetPx, SetTemp, clear, SetColourCycle
 
 
 # NeoPixel config
@@ -46,7 +50,7 @@ eth_interface = config_eth(NetworkConfig(**get_config_from_json_file()))
 wsgi_server, web_app = wsgi_web_server(eth_interface)
 wsgi_server.start()
 
-neo = neopixel.NeoPixel(PX_PIN, NUM_PX, auto_write=AUTO_WRITE, pixel_order=ORDER, brightness=0.01)
+neo = neopixel.NeoPixel(PX_PIN, NUM_PX, auto_write=AUTO_WRITE, pixel_order=ORDER, brightness=0.02)
 
 current_display_text = None
 background_event = asyncio.Event()
@@ -58,8 +62,27 @@ def clear_global():
     global current_display_text
     current_display_text = None
     background_event.set()
+    waiter = 0
+    while not background_event.is_set() and waiter < 20:
+        time.sleep(0.1)
+        waiter += 1
     # Create a new event
     background_event = asyncio.Event()
+
+def handle_async_request(func, tick: int = 1):
+    status_code = HTTPStatusCodes.OK
+    response = {"error": ErrorCodes.OK}
+    try:
+        px_handler = func()
+        if px_handler:
+            asyncio.create_task(run_async_task(px_handler.set, background_event, tick))
+    except Exception as exc:
+        response, status_code = internal_server_error(repr(exc))
+    return (
+        status_code,
+        [("Content-type", "application/json; charset=utf-8")],
+        [json.dumps(response).encode("UTF-8")]
+    )
 
 
 @web_app.route("/clear", methods=["GET"])
@@ -76,6 +99,14 @@ def set_px(request):
     set_px_handler = SetPx(request, neo, NUM_PX)
     return web_response_wrapper(set_px_handler.set)
 
+@web_app.route("/set-colour-cycle", methods=["GET"])
+def set_colour_cycle(_):
+    """API call. Set a X number of pixels to a value"""
+    clear_global()
+    def _func():
+        return SetColourCycle(neo, NUM_PX).set()
+    return handle_async_request(_func)
+
 
 @web_app.route("/set-temp", methods=["POST"])
 def set_temp(request):
@@ -89,28 +120,21 @@ def set_temp(request):
     The key is the RGB value you want the text to be. The below example sets the -1 display text to blue.
     Example: {"001": "-1"}
     """
-    try:
+    def _func():
         global current_display_text
         set_temp_handler = SetTemp(request, neo, NUM_PX).set()
         if set_temp_handler.display_text != current_display_text:
             clear_global()  # resets the pertinent global variables to default, sets the old background event
             current_display_text = set_temp_handler.display_text
-            asyncio.create_task(run_async_task(set_temp_handler.set, background_event, 1))
-        status_code = HTTPStatusCodes.OK
-        response = {"error": ErrorCodes.OK}
-    except Exception as exc:
-        response, status_code = internal_server_error(repr(exc))
-
-    return (
-        status_code,
-        [("Content-type", "application/json; charset=utf-8")],
-        [json.dumps(response).encode("UTF-8")]
-    )
+            return set_temp_handler
+        return None  # We need to do nothing
+    return handle_async_request(_func)
 
 
 def run_server(wsgi_server, eth_interface):
     wsgi_server.update_poll()
     eth_interface.maintain_dhcp_lease()
+    # print(gc.mem_free())
 
 
 async def run_async_task(callable_func, stop_event, sleep_val, *args, **kwargs):
@@ -123,6 +147,5 @@ async def main(wsgi_server, eth_interface, server_event):
     """Entry point"""
     server_task = asyncio.create_task(run_async_task(run_server, server_event, 0.1, wsgi_server, eth_interface))
     await asyncio.gather(server_task)
-
 
 asyncio.run(main(wsgi_server, eth_interface, server_event))

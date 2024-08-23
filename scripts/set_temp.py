@@ -13,7 +13,8 @@ class Args(ArgumentParser):
 
     def __init__(self, description="Gets the temp from a networked sensor and sets it on a networked pico display"):
         super().__init__(description=description)
-        self.add_argument("--sensor", type=str)
+        self.add_argument("--sensor", type=str, required=False)
+        self.add_argument("--temp", type=int, required=False, default=0)
         self.add_argument("--pico", type=str)
 
 
@@ -38,15 +39,18 @@ def set_web_req(dest: str, temp_val: int):
             print(resp)
 
 
-def temp_setter(sensor: str, pico: str):
-    sensor_temp = get_web_req(sensor)["temp"]
-    set_web_req(pico, int(sensor_temp))
+def temp_setter(pico: str, sensor: str | None = None, temp: int = 0):
+    if sensor:
+        sensor_temp = int(get_web_req(sensor)["temp"])
+    else:
+        sensor_temp = temp
+    set_web_req(pico, sensor_temp)
 
 
 def main():
     """Entry point"""
     args, _ = Args().parse_known_args()
-    temp_setter(args.sensor, args.pico)
+    temp_setter(args.pico, args.sensor, args.temp)
 
 
 if __name__ == "__main__":
