@@ -6,12 +6,22 @@ See code.py (in root) for full details.
 
 import re
 from random import randint
+import gc
 
 from wsgi_web_app_helpers import get_json_wsgi_input, bad_request
 
 
 class TooManyCharsException(Exception):
     """Oh no, there are too many characters"""
+
+
+def gc_collect_wrapper(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        finally:
+            gc.collect()
+    return wrapper
 
 
 # The index of the nested list is the digit it represents
@@ -118,6 +128,7 @@ class PostReqDisplayHandler(BaseDisplayHandler):
 
 class SetPx(PostReqDisplayHandler):
 
+    @gc_collect_wrapper
     def set(self):
         if not isinstance(self.req_data, dict):  # Something bad has happened here.
             return self.req_data
@@ -144,7 +155,6 @@ class SetPx(PostReqDisplayHandler):
 
 
 class BaseDisplayUpdater:
-
     # background colours
     blue = [[0, 0, 200], [200, 200, 200]]
     yellow = [[200, 200, 0], [200, 0, 200]]
@@ -161,6 +171,7 @@ class TempDisplayUpdater(BaseDisplayUpdater):
         self.neo = neo
         self.num_px = num_px
 
+    @gc_collect_wrapper
     def set(self):
         normalized_text_colour = [int(int(x) * 200) for x in self.display_text_colour]
         # create entire screen (background)
@@ -176,21 +187,14 @@ class TempDisplayUpdater(BaseDisplayUpdater):
 class ColourCycleDisplayUpdater(BaseDisplayUpdater):
 
     # I'd care about efficiency if it was important here.
-    ALL_COLOURS = sum(
-        [
-            BaseDisplayUpdater.blue,
-            BaseDisplayUpdater.red,
-            BaseDisplayUpdater.yellow,
-            BaseDisplayUpdater.green
-        ],
-        []
-    )
+    ALL_COLOURS = BaseDisplayUpdater.blue + BaseDisplayUpdater.red + BaseDisplayUpdater.yellow +BaseDisplayUpdater.green
     LEN_OF_COLOUR_CHOICES = len(ALL_COLOURS)
 
     def __init__(self, neo, num_px: int):
         self.neo = neo
         self.num_px = num_px
 
+    @gc_collect_wrapper
     def set(self):
         for x in range(self.num_px):
             self.neo[x] = self.ALL_COLOURS[randint(0, self.LEN_OF_COLOUR_CHOICES -1)]
@@ -198,6 +202,7 @@ class ColourCycleDisplayUpdater(BaseDisplayUpdater):
 
 class SetTemp(PostReqDisplayHandler):
 
+    @gc_collect_wrapper
     def set(self):
         if not isinstance(self.req_data, dict):  # Something bad has happened here.
             return self.req_data
